@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="hu">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VoiceScribe — Hang → Szöveg</title>
+  <meta name="description" content="WhatsApp hangüzenetek automatikus átírása szöveggé – OpenAI Whisper">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --bg-surface: #12121a;
+      --bg-card: rgba(18, 18, 26, .85);
+      --bg-card-hover: rgba(28, 28, 40, .9);
+      --bg-glass: rgba(255, 255, 255, .03);
+      --border: rgba(255, 255, 255, .06);
+      --border-active: rgba(79, 143, 255, .4);
+      --text: #f1f5f9;
+      --text2: #94a3b8;
+      --text3: #505670;
+      --accent: #4f8fff;
+      --accent2: #8b5cf6;
+      --accent-glow: rgba(79, 143, 255, .12);
+      --success: #34d399;
+      --success-bg: rgba(52, 211, 153, .1);
+      --danger: #f87171;
+      --danger-bg: rgba(248, 113, 113, .08);
+      --wa: #25d366;
+      --wa-bg: rgba(37, 211, 102, .1);
+      --radius: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 20px;
+      --transition: .22s cubic-bezier(.4, 0, .2, 1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box
+    }
+
+    body {
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at 25% 0%, rgba(79, 143, 255, .06) 0%, transparent 50%), radial-gradient(ellipse at 75% 100%, rgba(139, 92, 246, .05) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+      font-family: 'Outfit', sans-serif
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px 16px 60px
+    }
+
+    /* HEADER */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      backdrop-filter: blur(20px);
+      margin-bottom: 20px
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px
+    }
+
+    .logo {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 0 24px var(--accent-glow);
+      animation: logoPulse 3s ease-in-out infinite
+    }
+
+    @keyframes logoPulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 20px var(--accent-glow)
+      }
+
+      50% {
+        box-shadow: 0 0 36px rgba(79, 143, 255, .25)
+      }
+    }
+
+    .header h1 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent
+    }
+
+    .header p {
+      font-size: .75rem;
+      color: var(--text3);
+      margin-top: 1px
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: .73rem;
+      font-weight: 600;
+      border: 1px solid
+    }
+
+    .status-pill.on {
+      background: var(--success-bg);
+      color: var(--success);
+      border-color: rgba(52, 211, 153, .2)
+    }
+
+    .status-pill.off {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border-color: rgba(248, 113, 113, .15)
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s ease-in-out infinite
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1)
+      }
+
+      50% {
+        opacity: .4;
+        transform: scale(.75)
+      }
+    }
+
+    /* STATS BAR */
+    .stats-bar {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding: 14px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      backdrop-filter: blur(20px);
+      flex-wrap: wrap
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .85rem;
+      font-weight: 500;
+      color: var(--text2)
+    }
+
+    .stat-item .val {
+      font-family: 'Outfit';
+      font-weight: 700;
+      color: var(--text);
+      font-size: 1rem
+    }
+
+    .stat-sep {
+      width: 1px;
+      background: var(--border);
+      align-self: stretch;
+      margin: 0 4px
+    }
+
+    /* TABS */
+    .tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      padding: 0 4px
+    }
+
+    .tab-btn {
+      padding: 10px 20px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text3);
+      font-family: 'Outfit';
+      font-size: .88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition)
+    }
+
+    .tab-btn:hover {
+      color: var(--text2)
+    }
+
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent)
+    }
+
+    .tab-content {
+      display: none
+    }
+
+    .tab-content.active {
+      display: block
+    }
+
+    /* SEARCH */
+    .search-wrap {
+      margin-bottom: 16px
+    }
+
+    .search-inp {
+      width: 100%;
+      padding: 10px 14px 10px 38px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: .84rem;
+      font-family: inherit;
+      outline: none;
+      transition: var(--transition);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%23505670' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: 12px center
+    }
+
+    .search-inp:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow)
+    }
+
+    .search-inp::placeholder {
+      color: var(--text3)
+    }
+
+    /* TRANSCRIPTION CARDS */
+    .t-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px
+    }
+
+    .t-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      backdrop-filter: blur(16px);
+      transition: var(--transition);
+      animation: cardIn .4s ease-out both
+    }
+
+    .t-card:hover {
+      border-color: rgba(255, 255, 255, .1);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, .3)
+    }
+
+    @keyframes cardIn {
+      from {
+        opacity: 0;
+        transform: translateY(16px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    .t-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+      gap: 6px
+    }
+
+    .t-sender {
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    .t-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: .63rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .3px
+    }
+
+    .t-badge.wa {
+      background: var(--wa-bg);
+      color: var(--wa);
+      border: 1px solid rgba(37, 211, 102, .2)
+    }
+
+    .t-badge.manual {
+      background: var(--accent-glow);
+      color: var(--accent);
+      border: 1px solid rgba(79, 143, 255, .2)
+    }
+
+    .t-name {
+      font-family: 'Outfit';
+      font-weight: 600;
+      font-size: .88rem
+    }
+
+    .t-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .7rem;
+      color: var(--text3);
+      flex-wrap: wrap
+    }
+
+    .t-lang {
+      padding: 1px 7px;
+      background: rgba(255, 255, 255, .05);
+      border-radius: 4px;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: .62rem;
+      letter-spacing: .3px
+    }
+
+    .t-text {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: .82rem;
+      color: var(--text2);
+      line-height: 1.7;
+      margin: 6px 0 10px;
+      white-space: pre-wrap;
+      word-break: break-word
+    }
+
+    .t-text[contenteditable=true] {
+      background: rgba(79, 143, 255, .05);
+      border: 1px solid var(--border-active);
+      border-radius: 8px;
+      padding: 10px 12px;
+      outline: none
+    }
+
+    .t-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      opacity: 0;
+      transition: var(--transition)
+    }
+
+    .t-card:hover .t-actions {
+      opacity: 1
+    }
+
+    .t-btn {
+      padding: 5px 11px;
+      background: var(--bg-glass);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text3);
+      font-size: .7rem;
+      cursor: pointer;
+      transition: var(--transition);
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px
+    }
+
+    .t-btn:hover {
+      background: rgba(255, 255, 255, .07);
+      color: var(--text);
+      border-color: rgba(255, 255, 255, .12)
+    }
+
+    .t-btn.del:hover {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border-color: rgba(248, 113, 113, .25)
+    }
+
+    .load-more {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--accent);
+      font-size: .82rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: var(--transition);
+      margin-top: 10px
+    }
+
+    .load-more:hover {
+      background: var(--accent-glow)
+    }
+
+    .empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text3)
+    }
+
+    .empty .icon {
+      font-size: 2.8rem;
+      margin-bottom: 10px
+    }
+
+    /* UPLOAD TAB */
+    .upload-area {
+      max-width: 600px;
+      margin: 0 auto
+    }
+
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-xl);
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+      background: var(--bg-card)
+    }
+
+    .drop-zone::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(79, 143, 255, .04), rgba(139, 92, 246, .04));
+      opacity: 0;
+      transition: var(--transition)
+    }
+
+    .drop-zone:hover,
+    .drop-zone.over {
+      border-color: var(--accent);
+      box-shadow: 0 0 30px var(--accent-glow)
+    }
+
+    .drop-zone:hover::after,
+    .drop-zone.over::after {
+      opacity: 1
+    }
+
+    .drop-zone .dz-icon {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      position: relative;
+      z-index: 1
+    }
+
+    .drop-zone h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      position: relative;
+      z-index: 1
+    }
+
+    .drop-zone p {
+      font-size: .78rem;
+      color: var(--text3);
+      position: relative;
+      z-index: 1;
+      margin-top: 2px
+    }
+
+    .drop-zone input[type=file] {
+      display: none
+    }
+
+    .file-types {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      margin-top: 14px;
+      position: relative;
+      z-index: 1;
+      flex-wrap: wrap
+    }
+
+    .ft {
+      padding: 3px 9px;
+      background: rgba(255, 255, 255, .05);
+      border-radius: 4px;
+      font-size: .65rem;
+      color: var(--text3);
+      font-weight: 600
+    }
+
+    .upload-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 20px;
+      flex-wrap: wrap
+    }
+
+    .lang-select {
+      padding: 8px 12px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: .82rem;
+      font-family: inherit;
+      outline: none;
+      min-width: 160px
+    }
+
+    .lang-select:focus {
+      border-color: var(--accent)
+    }
+
+    .rec-row {
+      margin-top: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      justify-content: center
+    }
+
+    .rec-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 2.5px solid var(--danger);
+      background: var(--danger-bg);
+      color: var(--danger);
+      font-size: 1.3rem;
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center
+    }
+
+    .rec-btn:hover {
+      background: rgba(248, 113, 113, .18);
+      transform: scale(1.06)
+    }
+
+    .rec-btn.on {
+      animation: recPulse 1.2s ease-in-out infinite;
+      background: rgba(248, 113, 113, .22)
+    }
+
+    @keyframes recPulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(248, 113, 113, .4)
+      }
+
+      50% {
+        box-shadow: 0 0 0 14px rgba(248, 113, 113, 0)
+      }
+    }
+
+    .rec-timer {
+      font-family: 'Outfit';
+      font-size: 1.1rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--text3)
+    }
+
+    .rec-timer.on {
+      color: var(--danger)
+    }
+
+    .upload-status {
+      margin-top: 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      display: none
+    }
+
+    .upload-status.show {
+      display: block
+    }
+
+    .status-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .84rem;
+      font-weight: 500
+    }
+
+    .prog-bar {
+      height: 3px;
+      background: rgba(255, 255, 255, .04);
+      border-radius: 2px;
+      margin-top: 8px;
+      overflow: hidden
+    }
+
+    .prog-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 2px;
+      width: 0;
+      transition: width .5s ease
+    }
+
+    .prog-fill.spin {
+      width: 25%;
+      animation: spin 1.5s ease-in-out infinite
+    }
+
+    @keyframes spin {
+      0% {
+        transform: translateX(-100%)
+      }
+
+      100% {
+        transform: translateX(500%)
+      }
+    }
+
+    .result-box {
+      margin-top: 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-active);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      display: none;
+      box-shadow: 0 0 20px var(--accent-glow)
+    }
+
+    .result-box.show {
+      display: block
+    }
+
+    .result-box h4 {
+      font-size: .9rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    .result-text {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: .82rem;
+      line-height: 1.7;
+      color: var(--text2);
+      background: var(--bg-glass);
+      padding: 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap
+    }
+
+    .result-acts {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap
+    }
+
+    /* SETTINGS TAB */
+    .settings-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 600px
+    }
+
+    .set-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      backdrop-filter: blur(16px)
+    }
+
+    .set-card h3 {
+      font-size: .9rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    .set-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border)
+    }
+
+    .set-row:last-child {
+      border-bottom: none
+    }
+
+    .set-label {
+      font-size: .82rem;
+      color: var(--text2)
+    }
+
+    .set-val {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: .78rem;
+      color: var(--text3);
+      background: var(--bg-glass);
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      user-select: all;
+      cursor: text
+    }
+
+    /* Toggle */
+    .toggle {
+      position: relative;
+      width: 40px;
+      height: 22px;
+      cursor: pointer
+    }
+
+    .toggle input {
+      display: none
+    }
+
+    .toggle .slider {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, .1);
+      border-radius: 11px;
+      transition: var(--transition)
+    }
+
+    .toggle .slider::before {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      top: 3px;
+      left: 3px;
+      transition: var(--transition)
+    }
+
+    .toggle input:checked+.slider {
+      background: var(--accent)
+    }
+
+    .toggle input:checked+.slider::before {
+      transform: translateX(18px)
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-glass);
+      color: var(--text2);
+      font-size: .8rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition);
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, .07);
+      color: var(--text)
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff
+    }
+
+    .btn.primary:hover {
+      box-shadow: 0 4px 14px var(--accent-glow)
+    }
+
+    .btn.danger {
+      border-color: rgba(248, 113, 113, .2);
+      color: var(--danger)
+    }
+
+    .btn.danger:hover {
+      background: var(--danger-bg)
+    }
+
+    .danger-zone {
+      border-color: rgba(248, 113, 113, .15) !important
+    }
+
+    .danger-zone h3 {
+      color: var(--danger)
+    }
+
+    /* TOAST */
+    .toast-wrap {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px
+    }
+
+    .toast {
+      padding: 10px 18px;
+      border-radius: var(--radius);
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: .8rem;
+      font-weight: 500;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, .5);
+      animation: tin .3s ease-out;
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    .toast.ok {
+      border-color: rgba(52, 211, 153, .25)
+    }
+
+    .toast.err {
+      border-color: rgba(248, 113, 113, .25)
+    }
+
+    @keyframes tin {
+      from {
+        opacity: 0;
+        transform: translateX(30px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0)
+      }
+    }
+
+    @keyframes tout {
+      to {
+        opacity: 0;
+        transform: translateX(30px)
+      }
+    }
+
+    /* RESPONSIVE */
+    @media(max-width:640px) {
+      .header {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center
+      }
+
+      .stats-bar {
+        flex-direction: column;
+        gap: 8px
+      }
+
+      .stat-sep {
+        display: none
+      }
+
+      .tabs {
+        overflow-x: auto
+      }
+
+      .tab-btn {
+        white-space: nowrap;
+        padding: 8px 14px;
+        font-size: .8rem
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo">🎙️</div>
+        <div>
+          <h1>VoiceScribe</h1>
+          <p>Hang → Szöveg • WhatsApp + Kézi feltöltés</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="status-pill off" id="waPill"><span class="status-dot"></span><span id="waStatus">WhatsApp
+            offline</span></div>
+      </div>
+    </header>
+
+    <!-- STATS BAR -->
+    <div class="stats-bar">
+      <div class="stat-item">📊 <span class="val" id="sTotal">0</span> átírás</div>
+      <div class="stat-sep"></div>
+      <div class="stat-item">⏱️ <span class="val" id="sHours">0</span> óra</div>
+      <div class="stat-sep"></div>
+      <div class="stat-item" id="sseIndicator">🔴 <span>Nincs kapcsolat</span></div>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="wa">💬 WhatsApp üzenetek</button>
+      <button class="tab-btn" data-tab="upload">📤 Kézi feltöltés</button>
+      <button class="tab-btn" data-tab="settings">⚙️ Beállítások</button>
+    </div>
+
+    <!-- TAB: WHATSAPP -->
+    <div class="tab-content active" id="tab-wa">
+      <div class="search-wrap"><input class="search-inp" id="searchInp"
+          placeholder="Keresés feladó vagy szöveg szerint..."></div>
+      <div class="t-list" id="tList"></div>
+      <div class="empty" id="emptyWa">
+        <div class="icon">🎧</div>
+        <p>Még nincsenek átírások.</p>
+        <p style="font-size:.75rem;margin-top:4px">Küldj hangüzenetet WhatsApp-on!</p>
+      </div>
+      <button class="load-more" id="loadMore" style="display:none">Továbbiak betöltése…</button>
+    </div>
+
+    <!-- TAB: UPLOAD -->
+    <div class="tab-content" id="tab-upload">
+      <div class="upload-area">
+        <div class="drop-zone" id="dropZone">
+          <div class="dz-icon">🎵</div>
+          <h3>Húzd ide a hangfájlt</h3>
+          <p>vagy kattints a feltöltéshez</p>
+          <div class="file-types"><span class="ft">MP3</span><span class="ft">WAV</span><span class="ft">OGG</span><span
+              class="ft">M4A</span><span class="ft">WEBM</span><span class="ft">FLAC</span></div>
+          <p style="margin-top:8px;font-size:.7rem;position:relative;z-index:1">Max 25MB</p>
+          <input type="file" id="fileInp" accept="audio/*">
+        </div>
+        <div class="rec-row">
+          <button class="rec-btn" id="recBtn">⏺</button>
+          <span class="rec-timer" id="recTimer">00:00</span>
+          <span style="font-size:.8rem;color:var(--text3)">Felvétel indítása</span>
+        </div>
+        <div class="upload-controls">
+          <label style="font-size:.82rem;color:var(--text2)">Nyelv:</label>
+          <select class="lang-select" id="langSelect">
+            <option value="auto">Auto-detect</option>
+            <option value="hu">🇭🇺 Magyar</option>
+            <option value="ro">🇷🇴 Română</option>
+            <option value="en">🇬🇧 English</option>
+            <option value="de">🇩🇪 Deutsch</option>
+            <option value="fr">🇫🇷 Français</option>
+            <option value="es">🇪🇸 Español</option>
+          </select>
+        </div>
+        <div class="upload-status" id="upStatus">
+          <div class="status-line"><span id="upIcon">⏳</span><span id="upText">Feldolgozás...</span></div>
+          <div class="prog-bar">
+            <div class="prog-fill spin" id="progFill"></div>
+          </div>
+        </div>
+        <div class="result-box" id="resBox">
+          <h4>✅ Átírás kész <span class="t-lang" id="resLang"></span> <span style="font-size:.72rem;color:var(--text3)"
+              id="resDur"></span></h4>
+          <div class="result-text" id="resText"></div>
+          <div class="result-acts">
+            <button class="btn primary" onclick="copyRes()">📋 Másolás</button>
+            <button class="btn" id="resTxt">📄 TXT</button>
+            <button class="btn" id="resSrt">🎬 SRT</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: SETTINGS -->
+    <div class="tab-content" id="tab-settings">
+      <div class="settings-grid">
+        <div class="set-card">
+          <h3>📡 WhatsApp kapcsolat</h3>
+          <div class="set-row"><span class="set-label">Állapot</span><span id="setWaStatus" class="status-pill off"
+              style="font-size:.72rem"><span class="status-dot"></span>Offline</span></div>
+          <div class="set-row"><span class="set-label">Webhook URL</span><span class="set-val" id="setWebhook">—</span>
+          </div>
+        </div>
+        <div class="set-card">
+          <h3>⚙️ Beállítások</h3>
+          <div class="set-row"><span class="set-label">Automatikus válasz WhatsApp-on</span><label class="toggle"><input
+                type="checkbox" id="togAutoReply" checked><span class="slider"></span></label></div>
+          <div class="set-row"><span class="set-label">Alapértelmezett nyelv</span>
+            <select class="lang-select" id="setLang" style="min-width:130px;font-size:.78rem;padding:5px 8px">
+              <option value="auto">Auto-detect</option>
+              <option value="hu">Magyar</option>
+              <option value="ro">Română</option>
+              <option value="en">English</option>
+              <option value="de">Deutsch</option>
+            </select>
+          </div>
+        </div>
+        <div class="set-card">
+          <h3>📊 Tárhelyadatok</h3>
+          <div class="set-row"><span class="set-label">Összes átírás</span><span class="set-val" id="setCount">0</span>
+          </div>
+          <div class="set-row"><span class="set-label">Adatbázis méret</span><span class="set-val" id="setDisk">0
+              MB</span></div>
+        </div>
+        <div class="set-card">
+          <h3>💾 Export</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="location.href='/api/export?format=json'">📥 JSON letöltése</button>
+            <button class="btn" onclick="location.href='/api/export?format=csv'">📥 CSV letöltése</button>
+          </div>
+        </div>
+        <div class="set-card danger-zone">
+          <h3>⚠️ Veszélyes zóna</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn danger" id="btnClearAll">🗑️ Összes adat törlése</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script>
+    /* ══════════ STATE ══════════ */
+    let page = 1, totalPages = 1, search = '', lastResId = null, searchTmr = null;
+    let recorder = null, recChunks = [], recInt = null, recSec = 0;
+    let sse = null;
+
+    /* ══════════ INIT ══════════ */
+    document.addEventListener('DOMContentLoaded', () => {
+      loadStats(); loadList(); setupDrop(); setupRec(); setupTabs(); setupSearch();
+      loadSettings(); setupSettingsEvents(); connectSSE();
+    });
+
+    /* ══════════ SSE ══════════ */
+    function connectSSE() {
+      const ind = document.getElementById('sseIndicator');
+      sse = new EventSource('/api/stream');
+      sse.onopen = () => { ind.innerHTML = '🟢 <span>Élő kapcsolat</span>' };
+      sse.onerror = () => { ind.innerHTML = '🔴 <span>Újracsatlakozás...</span>' };
+      sse.onmessage = e => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'new_transcription') {
+            prependCard(msg.data); loadStats();
+            showToast(`Új átírás: ${msg.data.sender_name}`, 'ok');
+          }
+        } catch (err) { }
+      };
+    }
+
+    /* ══════════ TABS ══════════ */
+    function setupTabs() {
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+          b.classList.add('active');
+          document.getElementById('tab-' + b.dataset.tab).classList.add('active');
+        });
+      });
+    }
+
+    /* ══════════ LOAD DATA ══════════ */
+    async function loadStats() {
+      try {
+        const s = await (await fetch('/api/stats')).json();
+        anim('sTotal', s.totalTranscriptions); anim('sHours', s.totalDurationHours);
+        document.getElementById('setCount').textContent = s.totalTranscriptions;
+        document.getElementById('setDisk').textContent = s.diskUsageMB + ' MB';
+      } catch (e) { }
+    }
+
+    async function loadList(reset = true) {
+      try {
+        if (reset) page = 1;
+        const p = new URLSearchParams({ page, limit: 20, ...(search && { search }) });
+        const { data, pagination } = await (await fetch('/api/transcriptions?' + p)).json();
+        totalPages = pagination.totalPages;
+        const list = document.getElementById('tList'), empty = document.getElementById('emptyWa');
+        if (reset) list.innerHTML = '';
+        if (!data.length && page === 1) { empty.style.display = ''; list.innerHTML = ''; return }
+        empty.style.display = 'none';
+        data.forEach((d, i) => { const c = mkCard(d); c.style.animationDelay = i * 60 + 'ms'; list.appendChild(c) });
+        document.getElementById('loadMore').style.display = page < totalPages ? '' : 'none';
+      } catch (e) { }
+    }
+
+    function prependCard(item) {
+      const list = document.getElementById('tList');
+      const empty = document.getElementById('emptyWa');
+      empty.style.display = 'none';
+      const c = mkCard(item); list.prepend(c);
+    }
+
+    function mkCard(d) {
+      const div = document.createElement('div'); div.className = 't-card'; div.dataset.id = d.id;
+      const time = d.created_at ? new Date(d.created_at + 'Z').toLocaleString('hu-HU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+      const dur = d.duration ? fmtDur(d.duration) : '';
+      const flag = langFlag(d.language);
+      div.innerHTML = `
+    <div class="t-head">
+      <div class="t-sender">
+        <span class="t-badge ${d.source === 'whatsapp' ? 'wa' : 'manual'}">${d.source === 'whatsapp' ? '💬 WhatsApp' : '📤 Kézi'}</span>
+        <span class="t-name">👤 ${esc(d.sender_name || 'Ismeretlen')}${d.source === 'whatsapp' ? ' (' + esc(d.sender) + ')' : ''}</span>
+      </div>
+      <div class="t-meta">
+        ${d.language ? `<span class="t-lang">${flag} ${d.language.toUpperCase()}</span>` : ''}
+        ${dur ? `<span>⏱️ ${dur}</span>` : ''}
+        <span>📅 ${time}</span>
+      </div>
+    </div>
+    <div class="t-text" id="txt-${d.id}">${esc(d.transcription)}</div>
+    <div class="t-actions">
+      <button class="t-btn" onclick="ev(event);copyId(${d.id})">📋 Másolás</button>
+      <button class="t-btn" onclick="ev(event);editCard(${d.id})">✏️ Szerkesztés</button>
+      <button class="t-btn" onclick="ev(event);exprt(${d.id},'txt')">📄 TXT</button>
+      <button class="t-btn" onclick="ev(event);exprt(${d.id},'srt')">🎬 SRT</button>
+      <button class="t-btn del" onclick="ev(event);delItem(${d.id})">🗑️</button>
+    </div>`;
+      return div;
+    }
+
+    /* ══════════ SEARCH ══════════ */
+    function setupSearch() {
+      const inp = document.getElementById('searchInp');
+      inp.addEventListener('input', () => { clearTimeout(searchTmr); searchTmr = setTimeout(() => { search = inp.value.trim(); loadList() }, 300) });
+      document.getElementById('loadMore').addEventListener('click', () => { page++; loadList(false) });
+    }
+
+    /* ══════════ DRAG & DROP ══════════ */
+    function setupDrop() {
+      const z = document.getElementById('dropZone'), inp = document.getElementById('fileInp');
+      z.addEventListener('click', () => inp.click());
+      z.addEventListener('dragover', e => { e.preventDefault(); z.classList.add('over') });
+      z.addEventListener('dragleave', () => z.classList.remove('over'));
+      z.addEventListener('drop', e => { e.preventDefault(); z.classList.remove('over'); if (e.dataTransfer.files.length) upload(e.dataTransfer.files[0]) });
+      inp.addEventListener('change', () => { if (inp.files.length) upload(inp.files[0]); inp.value = '' });
+    }
+
+    async function upload(file) {
+      if (!file.type.startsWith('audio/')) { showToast('❌ Csak hangfájlok!', 'err'); return }
+      if (file.size > 25 * 1024 * 1024) { showToast('❌ Max 25MB!', 'err'); return }
+      const st = document.getElementById('upStatus'), ic = document.getElementById('upIcon'), tx = document.getElementById('upText'), fl = document.getElementById('progFill'), rb = document.getElementById('resBox');
+      rb.classList.remove('show'); st.classList.add('show'); ic.textContent = '⏳'; tx.textContent = 'Feldolgozás: ' + file.name + '...'; fl.className = 'prog-fill spin';
+      try {
+        const fd = new FormData(); fd.append('audio', file);
+        const r = await fetch('/api/transcribe', { method: 'POST', body: fd });
+        if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Hiba') }
+        const res = await r.json(); lastResId = res.id;
+        fl.classList.remove('spin'); fl.style.width = '100%'; ic.textContent = '✅'; tx.textContent = 'Kész!';
+        setTimeout(() => st.classList.remove('show'), 1200);
+        document.getElementById('resLang').textContent = (res.language || '').toUpperCase();
+        document.getElementById('resDur').textContent = res.duration ? Math.round(res.duration) + 's' : '';
+        document.getElementById('resText').textContent = res.text; rb.classList.add('show');
+        showToast('✅ Átírás sikeres!', 'ok'); loadStats(); loadList();
+      } catch (err) { ic.textContent = '❌'; tx.textContent = 'Hiba: ' + err.message; fl.classList.remove('spin'); fl.style.width = '0'; showToast('❌ ' + err.message, 'err') }
+    }
+
+    /* ══════════ RECORDER ══════════ */
+    function setupRec() { document.getElementById('recBtn').addEventListener('click', toggleRec) }
+    async function toggleRec() {
+      const btn = document.getElementById('recBtn'), tmr = document.getElementById('recTimer');
+      if (recorder && recorder.state === 'recording') { recorder.stop(); btn.classList.remove('on'); btn.textContent = '⏺'; clearInterval(recInt); tmr.classList.remove('on'); return }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' }); recChunks = []; recSec = 0; tmr.textContent = '00:00'; tmr.classList.add('on');
+        recorder.ondataavailable = e => { if (e.data.size > 0) recChunks.push(e.data) };
+        recorder.onstop = () => { stream.getTracks().forEach(t => t.stop()); upload(new File([new Blob(recChunks, { type: 'audio/webm' })], 'recording.webm', { type: 'audio/webm' })) };
+        recorder.start(); btn.classList.add('on'); btn.textContent = '⏹';
+        recInt = setInterval(() => { recSec++; tmr.textContent = pad(Math.floor(recSec / 60)) + ':' + pad(recSec % 60) }, 1000);
+      } catch (e) { showToast('❌ Mikrofon hozzáférés megtagadva', 'err') }
+    }
+
+    /* ══════════ SETTINGS ══════════ */
+    async function loadSettings() {
+      try {
+        const s = await (await fetch('/api/settings')).json();
+        document.getElementById('setWebhook').textContent = s.webhook_url || '—';
+        const pill = document.getElementById('setWaStatus'), hPill = document.getElementById('waPill');
+        if (s.whatsapp_connected) { pill.className = 'status-pill on'; pill.innerHTML = '<span class="status-dot"></span>Aktív'; hPill.className = 'status-pill on'; document.getElementById('waStatus').textContent = 'WhatsApp aktív' }
+        else { pill.className = 'status-pill off'; pill.innerHTML = '<span class="status-dot"></span>Offline'; hPill.className = 'status-pill off'; document.getElementById('waStatus').textContent = 'WhatsApp offline' }
+        document.getElementById('togAutoReply').checked = s.auto_reply === 'true';
+        document.getElementById('setLang').value = s.default_language || 'auto';
+      } catch (e) { }
+    }
+    function setupSettingsEvents() {
+      document.getElementById('togAutoReply').addEventListener('change', e => { patchSetting('auto_reply', e.target.checked ? 'true' : 'false') });
+      document.getElementById('setLang').addEventListener('change', e => { patchSetting('default_language', e.target.value) });
+      document.getElementById('btnClearAll').addEventListener('click', async () => { if (!confirm('FIGYELEM: Ez törli az összes átírást! Biztosan folytatod?')) return; await fetch('/api/transcriptions', { method: 'DELETE' }); showToast('🗑️ Összes adat törölve', 'ok'); loadStats(); loadList() });
+      document.getElementById('resTxt')?.addEventListener('click', () => { if (lastResId) exprt(lastResId, 'txt') });
+      document.getElementById('resSrt')?.addEventListener('click', () => { if (lastResId) exprt(lastResId, 'srt') });
+    }
+    async function patchSetting(k, v) { try { await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [k]: v }) }); showToast('✅ Mentve', 'ok') } catch (e) { } }
+
+    /* ══════════ ACTIONS ══════════ */
+    async function copyId(id) { try { const r = await (await fetch('/api/transcriptions/' + id)).json(); await navigator.clipboard.writeText(r.transcription); showToast('📋 Vágólapra másolva!', 'ok') } catch (e) { showToast('❌ Hiba', 'err') } }
+    function copyRes() { navigator.clipboard.writeText(document.getElementById('resText').textContent).then(() => showToast('📋 Másolva!', 'ok')) }
+    function exprt(id, fmt) { window.open('/api/transcriptions/' + id + '/export?format=' + fmt, '_blank') }
+    async function delItem(id) { if (!confirm('Biztosan törlöd?')) return; await fetch('/api/transcriptions/' + id, { method: 'DELETE' }); const c = document.querySelector(`.t-card[data-id="${id}"]`); if (c) c.remove(); showToast('🗑️ Törölve', 'ok'); loadStats() }
+    async function editCard(id) {
+      const el = document.getElementById('txt-' + id);
+      if (el.contentEditable === 'true') {
+        el.contentEditable = 'false';
+        await fetch('/api/transcriptions/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcription: el.textContent }) });
+        showToast('✅ Szerkesztés mentve', 'ok'); return;
+      }
+      el.contentEditable = 'true'; el.focus(); showToast('✏️ Szerkeszd a szöveget, majd kattints újra a Szerkesztésre', 'ok');
+    }
+    function ev(e) { e.stopPropagation() }
+
+    /* ══════════ HELPERS ══════════ */
+    function anim(elId, target) { const el = document.getElementById(elId); const cur = parseFloat(el.textContent) || 0; if (cur === target) { el.textContent = target; return } const d = target - cur; let s = 0; const iv = setInterval(() => { s++; const p = 1 - Math.pow(1 - s / 20, 3); el.textContent = Number.isInteger(target) ? Math.round(cur + d * p) : (cur + d * p).toFixed(1); if (s >= 20) { clearInterval(iv); el.textContent = target } }, 25) }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
+    function pad(n) { return String(n).padStart(2, '0') }
+    function fmtDur(s) { const m = Math.floor(s / 60), sec = Math.floor(s % 60); return m + ':' + pad(sec) }
+    function langFlag(l) { const m = { hu: '🇭🇺', ro: '🇷🇴', en: '🇬🇧', de: '🇩🇪', fr: '🇫🇷', es: '🇪🇸', it: '🇮🇹', pl: '🇵🇱', nl: '🇳🇱', pt: '🇵🇹', ru: '🇷🇺', ja: '🇯🇵', zh: '🇨🇳', ko: '🇰🇷', ar: '🇸🇦', tr: '🇹🇷', cs: '🇨🇿', sk: '🇸🇰', uk: '🇺🇦', bg: '🇧🇬', hr: '🇭🇷', sr: '🇷🇸', sl: '🇸🇮' }; return m[l] || '🌍' }
+    function showToast(msg, type = 'ok') { const w = document.getElementById('toastWrap'), t = document.createElement('div'); t.className = 'toast ' + type; t.textContent = msg; w.appendChild(t); setTimeout(() => { t.style.animation = 'tout .3s forwards'; setTimeout(() => t.remove(), 300) }, 3000) }
+  </script>
+</body>
+
+</html>
