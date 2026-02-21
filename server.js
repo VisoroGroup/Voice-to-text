@@ -8,6 +8,9 @@ const { initDatabase } = require('./services/storage');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy (Railway, Render, etc. run behind a reverse proxy)
+app.set('trust proxy', 1);
+
 // ── CORS ──────────────────────────────────────────────────────
 const corsOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
