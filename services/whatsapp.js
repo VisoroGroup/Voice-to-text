@@ -65,7 +65,48 @@ async function sendWhatsAppMessage(to, text) {
     return response.json();
 }
 
+/**
+ * Send a template message via WhatsApp Cloud API
+ * Templates can be sent anytime (no 24h window restriction)
+ */
+async function sendWhatsAppTemplate(to, templateName, params, language = 'en') {
+    const response = await fetch(
+        `${WHATSAPP_API_URL}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
+        {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messaging_product: 'whatsapp',
+                to: to,
+                type: 'template',
+                template: {
+                    name: templateName,
+                    language: { code: language },
+                    components: [
+                        {
+                            type: 'body',
+                            parameters: params.map(p => ({ type: 'text', text: p }))
+                        }
+                    ]
+                }
+            })
+        }
+    );
+
+    if (!response.ok) {
+        const error = await response.text();
+        console.error('WhatsApp template send error:', error);
+        throw new Error(`Failed to send template message: ${response.status}`);
+    }
+
+    return response.json();
+}
+
 module.exports = {
     downloadWhatsAppMedia,
-    sendWhatsAppMessage
+    sendWhatsAppMessage,
+    sendWhatsAppTemplate
 };

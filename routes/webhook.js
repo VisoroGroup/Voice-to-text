@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
-const { downloadWhatsAppMedia, sendWhatsAppMessage } = require('../services/whatsapp');
+const { downloadWhatsAppMedia, sendWhatsAppMessage, sendWhatsAppTemplate } = require('../services/whatsapp');
 const { transcribeAudio } = require('../services/whisper');
 const { saveTranscription, getSetting } = require('../services/storage');
 
@@ -168,15 +168,28 @@ async function handleAudioMessage(message, senderPhone, senderName, timestamp) {
     const forwardNumbers = process.env.FORWARD_TO_NUMBERS;
     if (forwardNumbers) {
         const numbers = forwardNumbers.split(',').map(n => n.trim()).filter(Boolean);
-        const forwardText = `📨 *Új hangüzenet átírás*\n\n👤 *Feladó:* ${senderName} (${senderPhone})\n⏱️ *Hossz:* ${Math.round(transcription.duration || 0)}s | 🌍 ${transcription.language}\n\n📝 *Szöveg:*\n${transcription.text}`;
+        const durationStr = `${Math.round(transcription.duration || 0)}s | ${transcription.language}`;
 
         for (const number of numbers) {
             if (number !== senderPhone) { // Don't double-send to the original sender
                 try {
-                    await sendWhatsAppMessage(number, forwardText);
-                    console.log(`  📨 Forwarded to ${number}`);
-                } catch (fwdErr) {
-                    console.error(`  ⚠️ Forward to ${number} failed:`, fwdErr.message);
+                    // Try template first (works without 24h window)
+                    await sendWhatsAppTemplate(number, 'voice_transcription_forward', [
+                        `${senderName} (${senderPhone})`,
+                        durationStr,
+                        transcription.text
+                    ]);
+                    console.log(`  📨 Forwarded to ${number} (template)`);
+                } catch (templateErr) {
+                    // Fall back to plain text (only works within 24h window)
+                    console.warn(`  ⚠️ Template failed for ${number}, trying plain text:`, templateErr.message);
+                    try {
+                        const forwardText = `📨 *Új hangüzenet átírás*\n\n👤 *Feladó:* ${senderName} (${senderPhone})\n⏱️ *Hossz:* ${durationStr}\n\n📝 *Szöveg:*\n${transcription.text}`;
+                        await sendWhatsAppMessage(number, forwardText);
+                        console.log(`  📨 Forwarded to ${number} (plain text)`);
+                    } catch (plainErr) {
+                        console.error(`  ❌ Forward to ${number} failed completely:`, plainErr.message);
+                    }
                 }
             }
         }
