@@ -163,6 +163,24 @@ async function handleAudioMessage(message, senderPhone, senderName, timestamp) {
         await sendWhatsAppMessage(senderPhone, replyText);
         console.log('  📤 Reply sent to WhatsApp');
     }
+
+    // Step 5: Forward transcription to configured numbers
+    const forwardNumbers = process.env.FORWARD_TO_NUMBERS;
+    if (forwardNumbers) {
+        const numbers = forwardNumbers.split(',').map(n => n.trim()).filter(Boolean);
+        const forwardText = `📨 *Új hangüzenet átírás*\n\n👤 *Feladó:* ${senderName} (${senderPhone})\n⏱️ *Hossz:* ${Math.round(transcription.duration || 0)}s | 🌍 ${transcription.language}\n\n📝 *Szöveg:*\n${transcription.text}`;
+
+        for (const number of numbers) {
+            if (number !== senderPhone) { // Don't double-send to the original sender
+                try {
+                    await sendWhatsAppMessage(number, forwardText);
+                    console.log(`  📨 Forwarded to ${number}`);
+                } catch (fwdErr) {
+                    console.error(`  ⚠️ Forward to ${number} failed:`, fwdErr.message);
+                }
+            }
+        }
+    }
 }
 
 /**
