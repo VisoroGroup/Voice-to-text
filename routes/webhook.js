@@ -155,10 +155,22 @@ async function handleAudioMessage(message, senderPhone, senderName, timestamp) {
         source: 'whatsapp'
     });
 
+    // Format date/time in Romanian timezone (Europe/Bucharest)
+    const now = new Date();
+    const dateStr = now.toLocaleString('ro-RO', {
+        timeZone: 'Europe/Bucharest',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+
     // Step 4: Send reply if auto-reply is enabled
     const autoReply = getSetting('auto_reply');
     if (autoReply === 'true') {
-        const replyText = `📝 *Transcriere:*\n\n${transcription.text}\n\n_Limbă: ${transcription.language} | ${Math.round(transcription.duration || 0)}s_`;
+        const replyText = `📝 *Transcriere:*\n\n📅 ${dateStr}\n\n${transcription.text}\n\n_Limbă: ${transcription.language} | ${Math.round(transcription.duration || 0)}s_`;
         await sendWhatsAppMessage(senderPhone, replyText);
         console.log('  📤 Reply sent to WhatsApp');
     }
@@ -169,26 +181,14 @@ async function handleAudioMessage(message, senderPhone, senderName, timestamp) {
         const numbers = forwardNumbers.split(',').map(n => n.trim()).filter(Boolean);
         const durationStr = `${Math.round(transcription.duration || 0)}s | ${transcription.language}`;
 
-        // Format date/time in Romanian timezone (Europe/Bucharest)
-        const now = new Date();
-        const dateStr = now.toLocaleString('ro-RO', {
-            timeZone: 'Europe/Bucharest',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
-
         for (const number of numbers) {
             if (number !== senderPhone) { // Don't double-send to the original sender
                 try {
                     // Try template first (works without 24h window)
                     await sendWhatsAppTemplate(number, 'voice_transcription_forward', [
                         `${senderName} (${senderPhone})`,
-                        durationStr,
-                        `[${dateStr}]\n${transcription.text}`
+                        `${dateStr} | ${durationStr}`,
+                        transcription.text
                     ]);
                     console.log(`  📨 Forwarded to ${number} (template)`);
                 } catch (templateErr) {
