@@ -122,7 +122,7 @@ async function handleAudioMessage(message, senderPhone, senderName, timestamp) {
         } catch (retryErr) {
             console.error('  ❌ Download failed after retry:', retryErr.message);
             await sendWhatsAppMessage(senderPhone,
-                '❌ Nem sikerült letölteni a hangüzenetet, kérlek próbáld újra.'
+                '❌ Nu am reușit să descarc mesajul vocal, te rog încearcă din nou.'
             ).catch(() => { });
             return;
         }
@@ -132,16 +132,15 @@ async function handleAudioMessage(message, senderPhone, senderName, timestamp) {
     if (audioBuffer.length > 25 * 1024 * 1024) {
         console.warn(`  ⚠️ Audio too large: ${Math.round(audioBuffer.length / 1024 / 1024)}MB`);
         await sendWhatsAppMessage(senderPhone,
-            '⚠️ A hangüzenet túl nagy (max 25MB). Kérlek küldj rövidebb üzenetet.'
+            '⚠️ Mesajul vocal este prea mare (max 25MB). Te rog trimite un mesaj mai scurt.'
         ).catch(() => { });
         return;
     }
 
     // Step 2: Transcribe with Whisper (has its own retry logic)
-    console.log('  🔄 Transcribing...');
-    const defaultLang = getSetting('default_language');
+    console.log('  🔄 Transcribing (ro)...');
     const transcription = await transcribeAudio(audioBuffer, mimeType, {
-        language: defaultLang !== 'auto' ? defaultLang : undefined
+        language: 'ro'
     });
     console.log(`  ✅ Transcribed (${transcription.language}): "${transcription.text.substring(0, 80)}..."`);
 
@@ -159,7 +158,7 @@ async function handleAudioMessage(message, senderPhone, senderName, timestamp) {
     // Step 4: Send reply if auto-reply is enabled
     const autoReply = getSetting('auto_reply');
     if (autoReply === 'true') {
-        const replyText = `📝 *Átírás:*\n\n${transcription.text}\n\n_Nyelv: ${transcription.language} | ${Math.round(transcription.duration || 0)}s_`;
+        const replyText = `📝 *Transcriere:*\n\n${transcription.text}\n\n_Limbă: ${transcription.language} | ${Math.round(transcription.duration || 0)}s_`;
         await sendWhatsAppMessage(senderPhone, replyText);
         console.log('  📤 Reply sent to WhatsApp');
     }
@@ -170,6 +169,18 @@ async function handleAudioMessage(message, senderPhone, senderName, timestamp) {
         const numbers = forwardNumbers.split(',').map(n => n.trim()).filter(Boolean);
         const durationStr = `${Math.round(transcription.duration || 0)}s | ${transcription.language}`;
 
+        // Format date/time in Romanian timezone (Europe/Bucharest)
+        const now = new Date();
+        const dateStr = now.toLocaleString('ro-RO', {
+            timeZone: 'Europe/Bucharest',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+
         for (const number of numbers) {
             if (number !== senderPhone) { // Don't double-send to the original sender
                 try {
@@ -177,14 +188,14 @@ async function handleAudioMessage(message, senderPhone, senderName, timestamp) {
                     await sendWhatsAppTemplate(number, 'voice_transcription_forward', [
                         `${senderName} (${senderPhone})`,
                         durationStr,
-                        transcription.text
+                        `[${dateStr}]\n${transcription.text}`
                     ]);
                     console.log(`  📨 Forwarded to ${number} (template)`);
                 } catch (templateErr) {
                     // Fall back to plain text (only works within 24h window)
                     console.warn(`  ⚠️ Template failed for ${number}, trying plain text:`, templateErr.message);
                     try {
-                        const forwardText = `📨 *Új hangüzenet átírás*\n\n👤 *Feladó:* ${senderName} (${senderPhone})\n⏱️ *Hossz:* ${durationStr}\n\n📝 *Szöveg:*\n${transcription.text}`;
+                        const forwardText = `📨 *Transcriere mesaj vocal*\n\n👤 *De la:* ${senderName} (${senderPhone})\n📅 *Trimis:* ${dateStr}\n⏱️ *Durată:* ${durationStr}\n\n📝 *Text:*\n${transcription.text}`;
                         await sendWhatsAppMessage(number, forwardText);
                         console.log(`  📨 Forwarded to ${number} (plain text)`);
                     } catch (plainErr) {
@@ -202,11 +213,11 @@ async function handleAudioMessage(message, senderPhone, senderName, timestamp) {
 async function handleTextMessage(message, senderPhone) {
     const body = message.text.body.toLowerCase().trim();
 
-    if (body === 'help' || body === 'segítség') {
+    if (body === 'help' || body === 'ajutor') {
         await sendWhatsAppMessage(senderPhone,
             '🎙️ *VoiceScribe*\n\n' +
-            'Küldj egy hangüzenetet és automatikusan átírom szöveggé!\n\n' +
-            'Támogatott nyelvek: 🇭🇺 Magyar, 🇷🇴 Román, 🇬🇧 Angol és 50+ más nyelv.\n\n' +
+            'Trimite un mesaj vocal și îl voi transcrie automat în text!\n\n' +
+            'Optimizat pentru limba română 🇷🇴\n\n' +
             '_Powered by OpenAI Whisper_'
         );
     }

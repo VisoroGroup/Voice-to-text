@@ -35,7 +35,7 @@ function sleep(ms) {
 async function transcribeAudio(audioBuffer, mimeType, { maxRetries = 3, language } = {}) {
     // Size guard
     if (audioBuffer.length > MAX_FILE_SIZE) {
-        throw new Error(`Hangfájl túl nagy (${Math.round(audioBuffer.length / 1024 / 1024)}MB). Maximum: 25MB.`);
+        throw new Error(`Fișierul audio este prea mare (${Math.round(audioBuffer.length / 1024 / 1024)}MB). Maximum: 25MB.`);
     }
 
     const baseMime = mimeType.split(';')[0].trim();

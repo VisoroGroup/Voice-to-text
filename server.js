@@ -26,7 +26,7 @@ const apiLimiter = rateLimit({
     max: 100,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: 'Túl sok kérés, próbáld újra később.' }
+    message: { error: 'Prea multe cereri, te rog încearcă mai târziu.' }
 });
 
 // Stricter limit for upload/transcribe (10 per 15 min per IP)
@@ -35,7 +35,7 @@ const uploadLimiter = rateLimit({
     max: 10,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: 'Túl sok feltöltés, próbáld újra később.' }
+    message: { error: 'Prea multe încărcări, te rog încearcă mai târziu.' }
 });
 
 // ── Body Parsing ──────────────────────────────────────────────
