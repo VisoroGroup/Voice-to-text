@@ -184,22 +184,22 @@ async function handleAudioMessage(message, senderPhone, senderName, timestamp) {
         for (const number of numbers) {
             if (number !== senderPhone) { // Don't double-send to the original sender
                 try {
-                    // Try plain text first (fully Romanian, nicely formatted)
-                    const forwardText = `📨 *Transcriere mesaj vocal*\n\n👤 *De la:* ${senderName} (${senderPhone})\n📅 *Trimis:* ${dateStr}\n⏱️ *Durată:* ${durationStr}\n\n📝 *Text:*\n${transcription.text}`;
-                    await sendWhatsAppMessage(number, forwardText);
-                    console.log(`  📨 Forwarded to ${number} (plain text)`);
-                } catch (plainErr) {
-                    // Fall back to template if plain text fails (24h window expired)
-                    console.warn(`  ⚠️ Plain text failed for ${number}, trying template:`, plainErr.message);
+                    // Template first (works without 24h window) — date at end of text
+                    await sendWhatsAppTemplate(number, 'voice_transcription_forward', [
+                        `${senderName} (${senderPhone})`,
+                        durationStr,
+                        `${transcription.text} — 📅 ${dateStr}`
+                    ]);
+                    console.log(`  📨 Forwarded to ${number} (template)`);
+                } catch (templateErr) {
+                    // Fall back to plain text (only works within 24h window)
+                    console.warn(`  ⚠️ Template failed for ${number}, trying plain text:`, templateErr.message);
                     try {
-                        await sendWhatsAppTemplate(number, 'voice_transcription_forward', [
-                            `${senderName} (${senderPhone})`,
-                            `${dateStr} | ${durationStr}`,
-                            transcription.text
-                        ]);
-                        console.log(`  📨 Forwarded to ${number} (template)`);
-                    } catch (templateErr) {
-                        console.error(`  ❌ Forward to ${number} failed completely:`, templateErr.message);
+                        const forwardText = `📨 *Transcriere mesaj vocal*\n\n👤 *De la:* ${senderName} (${senderPhone})\n⏱️ *Durată:* ${durationStr}\n\n📝 *Text:*\n${transcription.text}\n\n📅 *Trimis:* ${dateStr}`;
+                        await sendWhatsAppMessage(number, forwardText);
+                        console.log(`  📨 Forwarded to ${number} (plain text)`);
+                    } catch (plainErr) {
+                        console.error(`  ❌ Forward to ${number} failed completely:`, plainErr.message);
                     }
                 }
             }
